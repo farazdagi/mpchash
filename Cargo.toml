@@ -10,6 +10,7 @@ repository = "https://github.com/farazdagi/mpchash"
 documentation = "https://docs.rs/mpchash"
 readme = "README.md"
 keywords = ["consistent", "hash", "hashring", "consistent-hashing", "ring"]
+categories = ["algorithms", "data-structures"]
 
 [dependencies.xxhash-rust]
 version = "0.8.6"

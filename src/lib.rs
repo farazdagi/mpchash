@@ -3,7 +3,10 @@ mod partitioner;
 mod range;
 
 use {
-    crate::RingDirection::{Clockwise, CounterClockwise},
+    crate::{
+        iter::HashRingIter,
+        RingDirection::{Clockwise, CounterClockwise},
+    },
     std::{
         collections::BTreeMap,
         fmt::Debug,
@@ -11,7 +14,7 @@ use {
         ops::Bound::{Excluded, Unbounded},
     },
 };
-pub use {iter::*, partitioner::*, range::*};
+pub use {partitioner::*, range::*};
 
 /// Number of probing attempts before selecting key's position on the ring.
 ///

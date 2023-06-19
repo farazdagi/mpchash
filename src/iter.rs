@@ -1,5 +1,5 @@
 /// Defines an iterator over a range of ring token positions.
-pub(crate) enum HashRingIter<T, U> {
+pub enum HashRingIter<T, U> {
     Clockwise(T),
     CounterClockwise(U),
 }
