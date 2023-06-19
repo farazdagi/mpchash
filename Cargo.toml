@@ -1,0 +1,20 @@
+[package]
+name = "mpchash"
+version = "0.1.0"
+authors = ["Victor Farazdagi <farazdagi@gmail.com>"]
+edition = "2021"
+license = "MIT"
+description = "Multi-probe consistent hashing algorithm implementation"
+homepage = "https://github.com/farazdagi/mpchash"
+repository = "https://github.com/farazdagi/mpchash"
+documentation = "https://docs.rs/mpchash"
+readme = "README.md"
+keywords = ["consistent", "hash", "hashring", "consistent-hashing", "ring"]
+
+[dependencies.xxhash-rust]
+version = "0.8.6"
+features = ["xxh3", "const_xxh3"]
+
+[dependencies]
+num-traits = "0.2"
+rand = "0.8"
