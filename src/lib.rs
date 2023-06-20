@@ -1,3 +1,66 @@
+//! Multi-probe consistent hashing implementation based on [this paper](https://arxiv.org/pdf/1505.00062.pdf).
+//!
+//! # Overview
+//!
+//! Multi-probe consistent hashing is a variant of consistent hashing that
+//! doesn't require virtual nodes to achieve the same load balancing properties.
+//!
+//! Nodes are assigned randomly to positions on the ring, however the key is
+//! not assigned to the next clockwise node, but instead multiple probes (using
+//! double-hashing) are made, and attempt/position with the closest distance to
+//! some node wins -- that node is considered owning the key space for the key.
+//!
+//! This means that nodes that happen to control wide range of the key space
+//! still do not get an increased chance of being selected, as most probes for
+//! such nodes will happen to possess not the smallest distance to a key.
+//!
+//! # Main structures
+//!
+//! [`HashRing`] is the main structure that holds the ring state. For cases
+//! where ring of the `u64` size is not big enough, you will need to define your
+//! own [`Partitioner`].
+//!
+//! # Usage
+//! ```
+//! use {
+//!     mpchash::{HashRing, RingDirection::Clockwise},
+//!     rand::Rng,
+//! };
+//!
+//! // Define a node type.
+//! #[derive(Hash, Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+//! struct Node {
+//!     id: u64,
+//! }
+//! impl Node {
+//!     fn random() -> Self {
+//!         Self {
+//!             id: rand::thread_rng().gen(),
+//!         }
+//!     }
+//! }
+//!
+//! // Create a new ring.
+//! let mut ring = HashRing::new();
+//!
+//! // Populate the ring with some nodes.
+//! let node1 = Node::random();
+//! let node2 = Node::random();
+//! ring.add(node1);
+//! ring.add(node2);
+//!
+//! // Get the primary node for a key.
+//! let node = ring.primary_node(&0).unwrap();
+//!
+//! // Remove a node from the ring.
+//! ring.remove(&node1);
+//!
+//! // Iterate over the ring.
+//! for (position, node) in ring.tokens(0, Clockwise) {
+//!     println!("{}: {:?}", position, node);
+//! }
+//! ```
+
 mod iter;
 mod partitioner;
 mod range;
@@ -28,6 +91,10 @@ pub type RingPosition = u64;
 
 /// Node that can be assigned a position on the ring.
 pub trait RingNode: Hash + Clone + Copy + Debug + Eq + PartialEq + Ord + PartialOrd {}
+
+/// Blanket implementation of `RingNode` for all types that implement the
+/// necessary traits.
+impl<T> RingNode for T where T: Hash + Clone + Copy + Debug + Eq + PartialEq + Ord + PartialOrd {}
 
 /// An ownership over a position on the ring (by the object of type `T`,
 /// normally, `RingNode`).
@@ -69,6 +136,33 @@ impl<N: RingNode> Default for HashRing<N> {
 
 impl<N: RingNode> HashRing<N> {
     /// Creates a new hash ring.
+    ///
+    /// Any type implementing [`RingNode`] can be used as a node type.
+    ///
+    /// # Examples
+    ///
+    /// Create ring with `u64` nodes:
+    /// ```
+    /// use mpchash::HashRing;
+    ///
+    /// let mut ring = HashRing::<u64>::new();
+    /// ring.add(0);
+    /// ring.add(2)
+    /// ```
+    ///
+    /// Create ring with custom node type:
+    /// ```
+    /// use mpchash::{HashRing, RingNode};
+    ///
+    /// #[derive(Hash, Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+    /// struct Node {
+    ///     id: u64,
+    /// }
+    ///
+    /// let mut ring = HashRing::<Node>::new();
+    /// ring.add(Node { id: 0 });
+    /// ring.add(Node { id: 2 });
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
@@ -170,6 +264,11 @@ impl<N: RingNode> HashRing<N> {
                     .chain(self.positions.range((Excluded(start), Unbounded)).rev()),
             ),
         }
+    }
+
+    /// Returns ring position to which a given key will be assigned.
+    pub fn position<K: Hash>(&self, key: &K) -> RingPosition {
+        self.partitioner.position(key)
     }
 
     /// Returns size of the ring, i.e. number of contained tokens.

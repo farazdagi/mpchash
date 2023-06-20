@@ -20,8 +20,6 @@ impl Node {
     }
 }
 
-impl mpchash::RingNode for Node {}
-
 #[test]
 fn add_node() {
     let mut ring = HashRing::new();
@@ -135,7 +133,7 @@ fn tokens_wrap_around() {
 }
 
 #[track_caller]
-fn assert_peers(ring: &HashRing<Node>, start: u64, dir: RingDirection, expected: Vec<Node>) {
+fn assert_nodes(ring: &HashRing<Node>, start: u64, dir: RingDirection, expected: Vec<Node>) {
     let positions = ring
         .tokens(start, dir)
         .map(|token| *token.1)
@@ -150,7 +148,7 @@ fn tokens_corner_cases() {
     let node2 = Node::random();
     let node3 = Node::random();
 
-    // Peers at zero, max/2, and max.
+    // Nodes at zero, max/2, and max.
     ring.insert(0, node1);
     ring.insert(u64::MAX / 2, node2);
     ring.insert(u64::MAX, node3);
@@ -175,6 +173,22 @@ fn tokens_corner_cases() {
         (u64::MAX, CounterClockwise, vec![node3, node2, node1]),
     ];
     for (start, dir, expected) in test_cases {
-        assert_peers(&ring, start, dir, expected);
+        assert_nodes(&ring, start, dir, expected);
     }
+}
+
+#[test]
+fn tokens_for_key() {
+    let mut ring = HashRing::new();
+    let node1 = Node::random();
+    let node2 = Node::random();
+    let node3 = Node::random();
+    ring.add(node1);
+    ring.add(node2);
+    ring.add(node3);
+
+    let tokens = ring
+        .tokens(ring.position(&"foo"), Clockwise)
+        .collect::<Vec<_>>();
+    assert_eq!(tokens.len(), 3);
 }
