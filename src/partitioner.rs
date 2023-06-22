@@ -19,11 +19,13 @@ pub trait Partitioner<K: Hash> {
     fn position_seeded(&self, key: &K, seed: RingPosition) -> RingPosition;
 }
 
-/// Seeds for double hashing.
+/// Sample seed for double hashing.
 ///
 /// Essentially, we can use any seeds, to initialize the hasher (XXH3 uses `0`
 /// by default).
 pub const DEFAULT_SEED1: u64 = 12345;
+
+/// The second seed for double hashing.
 pub const DEFAULT_SEED2: u64 = 67890;
 
 /// A partitioner that uses a XXH3 hash function to partition data.
