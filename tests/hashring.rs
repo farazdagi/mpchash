@@ -34,7 +34,7 @@ fn add_node() {
     let num_keys = 1000;
     for i in 0..num_keys {
         let node = ring.primary_node(&i).unwrap();
-        assert!(nodes.contains(&node));
+        assert!(nodes.contains(node));
     }
 }
 

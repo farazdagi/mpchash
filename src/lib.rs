@@ -347,6 +347,25 @@ impl<N: RingNode> HashRing<N> {
         }
     }
 
+    /// Returns the key space range owned by a node, if it was located at given
+    /// position.
+    ///
+    /// If range is available, it always ends at the given position, and starts
+    /// at the position to the left (counter-clockwise) of the provided `pos`.
+    /// If range is not available, on an empty ring, for example, `None` is
+    /// returned.
+    ///
+    /// Note: since we semantically treat the ordered set as a ring, the key
+    /// range wraps around.
+    pub fn key_range(&self, pos: RingPosition) -> Option<KeyRange<RingPosition>> {
+        if self.positions.is_empty() {
+            return None;
+        }
+        let prev_pos = self.tokens(pos, Clockwise).next_back();
+        let start = prev_pos.map_or(0, |token| *token.0);
+        Some(KeyRange::new(start, pos))
+    }
+
     /// Returns ring position to which a given key will be assigned.
     pub fn position<K: Hash>(&self, key: &K) -> RingPosition {
         self.partitioner.position(key)

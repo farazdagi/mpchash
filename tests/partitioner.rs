@@ -3,7 +3,7 @@ use mpchash::{DefaultPartitioner, Partitioner, Xxh3Partitioner};
 #[test]
 fn default_partitioner() {
     let partitioner = DefaultPartitioner::new();
-    assert_eq!(partitioner.position(&0u64) as u64, 0x1424aa9885a1d5c7);
+    assert_eq!(partitioner.position(&0u64), 0x1424aa9885a1d5c7);
     assert_eq!(partitioner.position(&1u64), 0xcfb732e08be9ec0);
     assert_eq!(partitioner.position(&123456u64), 0x4879daae426e14fb);
 }
@@ -11,7 +11,7 @@ fn default_partitioner() {
 #[test]
 fn position() {
     let partitioner = Xxh3Partitioner::new();
-    assert_eq!(partitioner.position(&0u64) as u64, 0x1424aa9885a1d5c7);
+    assert_eq!(partitioner.position(&0u64), 0x1424aa9885a1d5c7);
     assert_eq!(partitioner.position(&1u64), 0xcfb732e08be9ec0);
     assert_eq!(partitioner.position(&123456u64), 0x4879daae426e14fb);
 }
