@@ -1,4 +1,4 @@
-//! Multi-probe consistent hashing implementation based on [this paper](https://arxiv.org/pdf/1505.00062.pdf).
+//! Consistent hashing algorithm implementation based on the [Multi-probe consistent hashing](https://arxiv.org/pdf/1505.00062.pdf) paper.
 //!
 //! # Overview
 //!
@@ -357,6 +357,31 @@ impl<N: RingNode> HashRing<N> {
     ///
     /// Note: since we semantically treat the ordered set as a ring, the key
     /// range wraps around.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mpchash::{HashRing, RingPosition};
+    ///
+    /// let mut ring = HashRing::new();
+    ///
+    /// // Define nodes.
+    /// let node1 = "SomeNode1";
+    /// let node2 = "SomeNode2";
+    ///
+    /// // Add nodes to the ring.
+    /// ring.add(node1);
+    /// ring.add(node2);
+    ///
+    /// // Get the range owned by node1.
+    /// let pos = ring.position(&node1);
+    /// let range = ring.key_range(pos).unwrap();
+    ///
+    /// // The range starts at the position to the left of node1,
+    /// // till (and not including) its own position.
+    /// assert_eq!(range.start, ring.position(&node2));
+    /// assert_eq!(range.end, ring.position(&node1));
+    /// ```
     pub fn key_range(&self, pos: RingPosition) -> Option<KeyRange<RingPosition>> {
         if self.positions.is_empty() {
             return None;
@@ -367,6 +392,15 @@ impl<N: RingNode> HashRing<N> {
     }
 
     /// Returns ring position to which a given key will be assigned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut ring = mpchash::HashRing::<u64>::new();
+    /// let key = "some key";
+    /// // Find the position of the key on the ring.
+    /// let pos = ring.position(&key);
+    /// ```
     pub fn position<K: Hash>(&self, key: &K) -> RingPosition {
         self.partitioner.position(key)
     }
