@@ -28,7 +28,7 @@
 //! };
 //!
 //! // Define a node type.
-//! #[derive(Hash, Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+//! #[derive(Hash, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 //! struct Node {
 //!     id: u64,
 //! }
@@ -46,7 +46,7 @@
 //! // Populate the ring with some nodes.
 //! let node1 = Node::random();
 //! let node2 = Node::random();
-//! ring.add(node1);
+//! ring.add(node1.clone());
 //! ring.add(node2);
 //!
 //! // Get the primary key space owning node for a key.
@@ -91,11 +91,11 @@ pub const DEFAULT_PROBE_COUNT: u16 = 23;
 pub type RingPosition = u64;
 
 /// Node that can be assigned a position on the ring.
-pub trait RingNode: Hash + Clone + Copy + Debug + Eq + PartialEq + Ord + PartialOrd {}
+pub trait RingNode: Hash + Clone + Debug + Eq + PartialEq + Ord + PartialOrd {}
 
 /// Blanket implementation of `RingNode` for all types that implement the
 /// necessary traits.
-impl<T> RingNode for T where T: Hash + Clone + Copy + Debug + Eq + PartialEq + Ord + PartialOrd {}
+impl<T> RingNode for T where T: Hash + Clone + Debug + Eq + PartialEq + Ord + PartialOrd {}
 
 /// An ownership over a position on the ring (by the object of type `T`,
 /// normally, `RingNode`).

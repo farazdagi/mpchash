@@ -3,7 +3,7 @@ use {
         HashRing,
         RingDirection::{self, Clockwise, CounterClockwise},
     },
-    rand::Rng,
+    rand::random,
     std::collections::BTreeSet,
 };
 
@@ -14,9 +14,7 @@ struct Node {
 
 impl Node {
     fn random() -> Self {
-        Self {
-            id: rand::thread_rng().gen(),
-        }
+        Self { id: random() }
     }
 }
 
