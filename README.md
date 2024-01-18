@@ -23,7 +23,7 @@ drop-in replacement for any existing implementation.
 
 Anything that implements the following traits can be placed on a ring as a node:
 
-`Hash` + `Clone` + `Copy` + `Debug` + `Eq` + `PartialEq` + `Ord` + `PartialOrd`
+`Hash` + `Clone` + `Debug` + `Eq` + `PartialEq` + `Ord` + `PartialOrd`
 
 Here is an example of using custom type as a node:
 
