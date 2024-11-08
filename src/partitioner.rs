@@ -1,5 +1,6 @@
 use {
     crate::RingPosition,
+    hash_iter::{DoubleHashHasher, HashIterHasher},
     std::hash::{BuildHasher, Hash, Hasher},
     xxhash_rust::xxh3::Xxh3Builder,
 };
@@ -11,6 +12,9 @@ use {
 pub trait Partitioner<K: Hash> {
     /// Returns ring position for a given key (using default seed).
     fn position(&self, key: &K) -> RingPosition;
+
+    /// Returns sequence of `k` ring positions for a given key.
+    fn positions(&self, key: &K, k: usize) -> impl Iterator<Item = RingPosition>;
 
     /// Returns ring position for a given key (using a given seed).
     ///
@@ -32,12 +36,18 @@ pub const DEFAULT_SEED2: u64 = 67890;
 #[derive(Clone)]
 pub struct Xxh3Partitioner {
     hash_builder: Xxh3Builder,
+    hash_iter: DoubleHashHasher,
 }
 
 impl Default for Xxh3Partitioner {
     fn default() -> Self {
         Self {
             hash_builder: Xxh3Builder::new(),
+            hash_iter: DoubleHashHasher::with_hash_builders(
+                Xxh3Builder::new(),
+                Xxh3Builder::new(),
+                RingPosition::MAX,
+            ),
         }
     }
 }
@@ -57,6 +67,10 @@ impl Xxh3Partitioner {
 impl<K: Hash> Partitioner<K> for Xxh3Partitioner {
     fn position(&self, key: &K) -> RingPosition {
         self.hash(key, DEFAULT_SEED1)
+    }
+
+    fn positions(&self, key: &K, k: usize) -> impl Iterator<Item = RingPosition> {
+        self.hash_iter.hash_iter(key, k)
     }
 
     fn position_seeded(&self, key: &K, seed: RingPosition) -> RingPosition {

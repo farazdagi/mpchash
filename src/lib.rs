@@ -1,66 +1,4 @@
-//! Consistent hashing algorithm implementation based on the [Multi-probe consistent hashing](https://arxiv.org/pdf/1505.00062.pdf) paper.
-//!
-//! # Overview
-//!
-//! Multi-probe consistent hashing is a variant of consistent hashing that
-//! doesn't require virtual nodes to achieve the same load balancing properties.
-//!
-//! Nodes are assigned randomly to positions on the ring, however the key is
-//! not assigned to the next clockwise node, but instead multiple probes (using
-//! double-hashing) are made, and attempt/position with the closest distance to
-//! some node wins -- that node is considered owning the key space for the key.
-//!
-//! This means that nodes that happen to control wide range of the key space
-//! still do not get an increased chance of being selected, as most probes for
-//! such nodes will happen to possess not the smallest distance to a key.
-//!
-//! # Main structures
-//!
-//! [`HashRing`] is the main structure that holds the ring state. For cases
-//! where ring of the `u64` size is not big enough, you will need to define your
-//! own [`Partitioner`].
-//!
-//! # Usage
-//! ```
-//! use {
-//!     mpchash::{HashRing, RingDirection::Clockwise},
-//!     rand::Rng,
-//! };
-//!
-//! // Define a node type.
-//! #[derive(Hash, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-//! struct Node {
-//!     id: u64,
-//! }
-//! impl Node {
-//!     fn random() -> Self {
-//!         Self {
-//!             id: rand::thread_rng().gen(),
-//!         }
-//!     }
-//! }
-//!
-//! // Create a new ring.
-//! let mut ring = HashRing::new();
-//!
-//! // Populate the ring with some nodes.
-//! let node1 = Node::random();
-//! let node2 = Node::random();
-//! ring.add(node1.clone());
-//! ring.add(node2);
-//!
-//! // Get the primary key space owning node for a key.
-//! // This will return the first node when moving clockwise from the key's position.
-//! let node = ring.primary_node(&42).unwrap();
-//!
-//! // Remove a node from the ring.
-//! ring.remove(&node1);
-//!
-//! // Iterate over the ring.
-//! for (position, node) in ring.tokens(0, Clockwise) {
-//!     println!("{}: {:?}", position, node);
-//! }
-//! ```
+#![doc = include_str!("../README.md")]
 
 mod iter;
 mod partitioner;
@@ -85,7 +23,7 @@ pub use {partitioner::*, range::*};
 /// The probe with minimal distance to some assigned node is selected. Then the
 /// first node when moving clockwise from the selected probe is deemed to be key
 /// owner.
-pub const DEFAULT_PROBE_COUNT: u16 = 23;
+pub const DEFAULT_PROBE_COUNT: usize = 23;
 
 /// Position on the ring.
 pub type RingPosition = u64;
@@ -122,7 +60,7 @@ pub struct HashRing<N: RingNode, P = DefaultPartitioner> {
     positions: BTreeMap<RingPosition, N>,
 
     /// The number of positions to probe for a given key.
-    probe_count: u16,
+    probe_count: usize,
 }
 
 impl<N: RingNode> Default for HashRing<N> {
@@ -274,15 +212,10 @@ impl<N: RingNode> HashRing<N> {
     pub fn primary_token<K: Hash>(&self, key: &K) -> Option<RingToken<N>> {
         let mut min_distance = RingPosition::MAX;
         let mut min_token = None;
-        let h1 = self.partitioner.position_seeded(key, DEFAULT_SEED1);
-        let h2 = self.partitioner.position_seeded(key, DEFAULT_SEED2);
 
         // Calculate several positions for the given key and select the one with the
         // minimal distance to the owner.
-        for i in 0..self.probe_count {
-            // pos = h1 + i * h2
-            let pos = h1.wrapping_add((i as RingPosition).wrapping_mul(h2));
-
+        for pos in self.partitioner.positions(key, self.probe_count) {
             // Find the peer that owns the position, and calculate the distance to it.
             match self.tokens(pos, Clockwise).next() {
                 Some((next_pos, next_peer_id)) => {
