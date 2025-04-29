@@ -91,12 +91,11 @@ use mpchash::HashRing;
 #        Self { id }
 #    }
 # }
-fn main() {
-    let mut ring = HashRing::new();
-    ring.add(Node::new(1));
-    ring.add(Node::new(2));
-    ring.add(Node::new(3));
-}
+
+let mut ring = HashRing::new();
+ring.add(Node::new(1));
+ring.add(Node::new(2));
+ring.add(Node::new(3));
 ```
 
 ### Finding a node that owns a key
@@ -116,28 +115,27 @@ use mpchash::HashRing;
 #        Self { id }
 #    }
 # }
-fn main() {
+
+// ... ring initialization code
 #   let mut ring = HashRing::new();
 #   ring.add(Node::new(1));
 #   ring.add(Node::new(2));
 #   ring.add(Node::new(3));
-    // ... ring initialization code
 
-    // Anything that implements `Hash` can be used as a key.
-    let key = "hello world";
+// Anything that implements `Hash` can be used as a key.
+let key = "hello world";
 
-    // Node that owns the key.
-    //
-    // It is the first node when moving in CW direction from the
-    // position where key is hashed to.
-    let owning_node = ring.primary_node(&key);
+// Node that owns the key.
+//
+// It is the first node when moving in CW direction from the
+// position where key is hashed to.
+let owning_node = ring.primary_node(&key);
 
-    // If we are interested in both ring position and owning node,
-    // we can get them with `primary_token`.
-    //
-    // A token is just a tuple of `(position, node)`.
-    let token = ring.primary_token(&key);
-}
+// If we are interested in both ring position and owning node,
+// we can get them with `primary_token`.
+//
+// A token is just a tuple of `(position, node)`.
+let token = ring.primary_token(&key);
 ```
 
 In replicated settings, we want to have several replicas of a key, so need multiple
@@ -158,19 +156,17 @@ use mpchash::{HashRing, RingDirection::Clockwise};
 #        Self { id }
 #    }
 # }
-fn main() {
-    let mut ring = HashRing::new();
-    ring.add(Node::new(1));
-    ring.add(Node::new(1));
+let mut ring = HashRing::new();
+ring.add(Node::new(1));
+ring.add(Node::new(1));
 
-    let key = "hello world";
-    let tokens = ring
-        .tokens(ring.position(&key), Clockwise)
-        .collect::<Vec<_>>();
+let key = "hello world";
+let tokens = ring
+    .tokens(ring.position(&key), Clockwise)
+    .collect::<Vec<_>>();
 
-    for (pos, node) in ring.tokens(ring.position(&key), Clockwise) {
-        println!("node {:?} is at position {:?}", node, pos);
-    }
+for (pos, node) in ring.tokens(ring.position(&key), Clockwise) {
+    println!("node {:?} is at position {:?}", node, pos);
 }
 ```
 
@@ -187,26 +183,24 @@ account for the wrap-around. All this is handled by the `key_range` method:
 ``` rust
 use mpchash::{HashRing, RingDirection::Clockwise};
 
-fn main() {
-    let mut ring = HashRing::new();
+let mut ring = HashRing::new();
 
-    // Define nodes.
-    let node1 = "SomeNode1";
-    let node2 = "SomeNode2";
+// Define nodes.
+let node1 = "SomeNode1";
+let node2 = "SomeNode2";
 
-    // Add nodes to the ring.
-    ring.add(node1);
-    ring.add(node2);
+// Add nodes to the ring.
+ring.add(node1);
+ring.add(node2);
 
-    // Get the range owned by node1.
-    let pos = ring.position(&node1);
-    let range = ring.key_range(pos).unwrap();
+// Get the range owned by node1.
+let pos = ring.position(&node1);
+let range = ring.key_range(pos).unwrap();
 
-    // The range starts at the position to the left of node1,
-    // till (and not including) its own position.
-    assert_eq!(range.start, ring.position(&node2));
-    assert_eq!(range.end, ring.position(&node1));
-}
+// The range starts at the position to the left of node1,
+// till (and not including) its own position.
+assert_eq!(range.start, ring.position(&node2));
+assert_eq!(range.end, ring.position(&node1));
 ```
 
 ## License

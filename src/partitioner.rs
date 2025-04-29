@@ -1,7 +1,7 @@
 use {
     crate::RingPosition,
     hash_iter::{DoubleHashHasher, HashIterHasher},
-    std::hash::{BuildHasher, Hash, Hasher},
+    std::hash::{BuildHasher, Hash},
     xxhash_rust::xxh3::Xxh3Builder,
 };
 
@@ -58,9 +58,7 @@ impl Xxh3Partitioner {
     }
 
     pub fn hash<K: Hash>(&self, key: &K, seed: RingPosition) -> RingPosition {
-        let mut hasher = self.hash_builder.with_seed(seed).build_hasher();
-        key.hash(&mut hasher);
-        hasher.finish()
+        self.hash_builder.with_seed(seed).hash_one(key)
     }
 }
 
