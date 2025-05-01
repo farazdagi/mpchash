@@ -350,7 +350,7 @@ impl<N: RingNode> HashRing<N> {
 }
 
 /// Calculates distance between two ring positions.
-fn distance(pos1: RingPosition, pos2: RingPosition) -> RingPosition {
+const fn distance(pos1: RingPosition, pos2: RingPosition) -> RingPosition {
     if pos1 > pos2 {
         RingPosition::MAX - pos1 + pos2
     } else {

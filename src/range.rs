@@ -23,7 +23,7 @@ where
 
 impl<Idx: Bounded> KeyRange<Idx> {
     /// Creates a new range.
-    pub fn new(start: Idx, end: Idx) -> Self {
+    pub const fn new(start: Idx, end: Idx) -> Self {
         Self { start, end }
     }
 }
@@ -131,11 +131,11 @@ where
         }
     }
 
-    fn range_from(&self) -> RangeFrom<&Idx> {
+    const fn range_from(&self) -> RangeFrom<&Idx> {
         &self.start..
     }
 
-    fn range_to(&self) -> RangeTo<&Idx> {
+    const fn range_to(&self) -> RangeTo<&Idx> {
         ..&self.end
     }
 }
