@@ -13,9 +13,6 @@ Consistent hashing algorithm implementation based on the
 - [x] No virtual nodes, so no extra space required -- `O(n)` space complexity. The high space
   requirement is the main downside of the original
   [Karger's ring](https://dl.acm.org/doi/10.1145/258533.258660).
-- [x] Supports very simple
-  [`keyspace management API`](https://docs.rs/mpchash/latest/mpchash/trait.Keyspace.html) which
-  is enough for dynamic key space partitioning and re-balancing.
 
 ## Motivation
 
@@ -35,18 +32,19 @@ Multi-probe consistent hashing resolves this problem.
 
 ## Usage
 
-The implementation supports all the necessary methods for [key space management](crate::Keyspace):
+The implementation supports all the necessary methods for hash ring management:
 
 ``` rust
 use mpchash::{HashRing, Keyspace};
+use std::ops::Deref;
 
-// Anything that implements `Hash` can be used as a node.
+// Anything that implements `Hash + Send` can be used as a node.
 // Other traits used here are derived for testing purposes.
 #[derive(Hash, Debug, PartialEq, Clone, Copy)]
 struct MyNode(u64);
 
 // Create a new ring, and add nodes to it.
-let mut ring = HashRing::new();
+let ring = HashRing::new();
 ring.add(MyNode(1));
 ring.add(MyNode(2));
 ring.add(MyNode(3));
@@ -56,35 +54,56 @@ ring.add(MyNode(5));
 // Anything that implements `Hash` can be used as a key.
 // To find which node should own a key:
 let key = "hello world";
-let owning_node = ring.node(&key).expect("empty ring");
-assert_eq!(owning_node, &MyNode(2));
+
+// Token is a thin wrapper holding reference to node itself
+// and to its position on the ring.
+let token = ring.node(&key).expect("empty ring");
+assert_eq!(token.position(), 1242564280540428107);
+assert_eq!(token.node(), &MyNode(2));
 
 // In replicated settings, we want to have several replicas
-// of a key, so need multiple destination/owning nodes.
-// Assuming we have a replication factor of 3, we can do:
-let owning_nodes = ring.replicas(&key, 3).expect("empty ring");
-assert_eq!(owning_nodes, vec![&MyNode(1), &MyNode(2), &MyNode(3)]);
+// of a key to be stored redundantly, therefore we need multiple
+// destination/owning nodes.
+//
+// Assuming a replication factor of 3, we can do:
+let tokens = ring.replicas(&key, 3).expect("empty ring");
+assert_eq!(tokens.iter().map(|e| e.node()).collect::<Vec<_>>(), vec![
+    &MyNode(1),
+    &MyNode(2),
+    &MyNode(3)
+]);
+
+// Token can be also dereferenced to get the node itself.
+assert_eq!(tokens.iter().map(Deref::deref).collect::<Vec<_>>(), vec![
+    &MyNode(1),
+    &MyNode(2),
+    &MyNode(3)
+]);
 
 // Before node removal we probably need to move its data.
 // To find out range of keys owned by a node:
-let ranges = ring.intervals(owning_node).expect("empty ring");
+let ranges = ring.intervals(&token).expect("empty ring");
 assert_eq!(ranges.len(), 1);
 
 // The range starts at the position where previous node ends,
 // and ends at the position of the owning node.
 assert_eq!(ranges[0].start, ring.position(&MyNode(1)));
-assert_eq!(ranges[0].end, ring.position(&owning_node));
+assert_eq!(ranges[0].end, ring.position(&token.node()));
 
 // Remove node and check the owning nodes again.
-ring.remove(&MyNode(2));
+let token_removed = ring.remove(&MyNode(2)).expect("empty ring");
+assert_eq!(token_removed.node(), &MyNode(2));
 
 // `MyNode(2)` is removed, `MyNode(4)` takes its place now.
-let owning_node = ring.node(&key).expect("empty ring");
-assert_eq!(owning_node, &MyNode(4));
+let token = ring.node(&key).expect("empty ring");
+assert_eq!(token.node(), &MyNode(4));
 
-let owning_nodes = ring.replicas(&key, 3).expect("empty ring");
-assert_eq!(owning_nodes, vec![&MyNode(1), &MyNode(3), &MyNode(4)]);
-
+let tokens = ring.replicas(&key, 3).expect("empty ring");
+assert_eq!(tokens.iter().map(|e| e.deref()).collect::<Vec<_>>(), vec![
+    &MyNode(1),
+    &MyNode(3),
+    &MyNode(4)
+]);
 ```
 
 ## Implementation Notes

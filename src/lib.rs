@@ -3,22 +3,25 @@
 mod iter;
 mod partitioner;
 mod range;
+mod token;
 
 use {
     crate::{
         iter::HashRingIter,
         RingDirection::{Clockwise, CounterClockwise},
     },
+    crossbeam_skiplist::SkipMap,
     std::{
-        collections::BTreeMap,
         hash::Hash,
         ops::Bound::{Excluded, Unbounded},
+        sync::Arc,
     },
 };
 pub use {
-    keyspace::{Keyspace, Node as RingNode},
+    keyspace::{Keyspace, Node as RingNode, NodeRef},
     partitioner::*,
     range::*,
+    token::RingToken,
 };
 
 /// Number of probing attempts before selecting key's position on the ring.
@@ -30,10 +33,6 @@ pub const DEFAULT_PROBE_COUNT: usize = 23;
 
 /// Position on the ring.
 pub type RingPosition = u64;
-
-/// An ownership over a position on the ring (by the object of type `T`,
-/// normally, `RingNode`).
-pub type RingToken<'a, T> = (&'a RingPosition, &'a T);
 
 /// Defines the direction in which the ring is traversed.
 #[derive(Clone, Copy)]
@@ -53,7 +52,7 @@ pub struct HashRing<N: RingNode, P = DefaultPartitioner> {
     partitioner: P,
 
     /// The ring positions assigned to nodes (sorted in ascending order).
-    positions: BTreeMap<RingPosition, N>,
+    positions: Arc<SkipMap<RingPosition, N>>,
 
     /// The number of positions to probe for a given key.
     probe_count: usize,
@@ -63,7 +62,7 @@ impl<N: RingNode> Default for HashRing<N> {
     fn default() -> Self {
         Self {
             partitioner: DefaultPartitioner::new(),
-            positions: BTreeMap::new(),
+            positions: Arc::new(SkipMap::new()),
             probe_count: DEFAULT_PROBE_COUNT,
         }
     }
@@ -71,21 +70,13 @@ impl<N: RingNode> Default for HashRing<N> {
 
 impl<N: RingNode> Keyspace<N> for HashRing<N> {
     type Interval = KeyRange<RingPosition>;
+    type NodeRef<'a> = RingToken<'a, N>;
     type Position = RingPosition;
 
-    /// Adds a new node to the ring.
+    /// Adds a new node and its capacity to the ring.
     ///
     /// The position is computed deterministically using keyspace partitioner.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use mpchash::Keyspace;
-    ///
-    /// let mut ring = mpchash::HashRing::<u64>::new();
-    /// ring.add(0);
-    /// ```
-    fn add(&mut self, node: N) {
+    fn add_with_capacity(&self, node: N, _capacity: usize) {
         let pos = self.partitioner.position(&node);
         self.positions.insert(pos, node);
     }
@@ -97,24 +88,24 @@ impl<N: RingNode> Keyspace<N> for HashRing<N> {
     /// ```
     /// use mpchash::Keyspace;
     ///
-    /// let mut ring = mpchash::HashRing::<u64>::new();
+    /// let ring = mpchash::HashRing::<u64>::new();
     /// ring.add(42);
     /// ring.remove(&42);
     /// ```
-    fn remove(&mut self, node: &N) {
+    fn remove(&self, node: &N) -> Option<Self::NodeRef<'_>> {
         let pos = self.partitioner.position(node);
-        self.positions.remove(&pos);
+        self.positions.remove(&pos).map(Into::into)
     }
 
-    fn node<K: Hash>(&self, key: &K) -> Option<&N> {
+    fn node<K: Hash>(&self, key: &K) -> Option<Self::NodeRef<'_>> {
         self.primary_node(key)
     }
 
-    fn replicas<K: Hash>(&self, key: &K, k: usize) -> Option<Vec<&N>> {
-        let mut result = Vec::new();
-        self.tokens(self.position(key), Clockwise)
+    fn replicas<K: Hash>(&self, key: &K, k: usize) -> Option<Vec<Self::NodeRef<'_>>> {
+        let result = self
+            .tokens(self.position(key), Clockwise)
             .take(k)
-            .for_each(|token| result.push(token.1));
+            .collect::<Vec<_>>();
         Some(result)
     }
 
@@ -129,7 +120,7 @@ impl<N: RingNode> Keyspace<N> for HashRing<N> {
     ///
     /// ```
     /// use mpchash::Keyspace;
-    /// let mut ring = mpchash::HashRing::<u64>::new();
+    /// let ring = mpchash::HashRing::<u64>::new();
     /// let key = "some key";
     /// // Find the position of the key on the ring.
     /// let pos = ring.position(&key);
@@ -150,7 +141,7 @@ impl<N: RingNode> HashRing<N> {
     /// ```
     /// use mpchash::Keyspace;
     ///
-    /// let mut ring = mpchash::HashRing::<u64>::new();
+    /// let ring = mpchash::HashRing::<u64>::new();
     /// ring.add(0);
     /// ring.add(2)
     /// ```
@@ -164,7 +155,7 @@ impl<N: RingNode> HashRing<N> {
     ///     id: u64,
     /// }
     ///
-    /// let mut ring = HashRing::<Node>::new();
+    /// let ring = HashRing::<Node>::new();
     /// ring.add(Node { id: 0 });
     /// ring.add(Node { id: 2 });
     /// ```
@@ -180,13 +171,13 @@ impl<N: RingNode> HashRing<N> {
     ///
     /// ```
     /// use mpchash::Keyspace;
-    /// let mut ring = mpchash::HashRing::<u64>::new();
+    /// let ring = mpchash::HashRing::<u64>::new();
     /// // Insert node "15" at position 0.
     /// ring.insert(0, 15);
     /// // Insert node "16" at position 1.
     /// ring.insert(1, 16);
     /// ```
-    pub fn insert(&mut self, pos: RingPosition, node: N) {
+    pub fn insert(&self, pos: RingPosition, node: N) {
         self.positions.insert(pos, node);
     }
 
@@ -195,25 +186,8 @@ impl<N: RingNode> HashRing<N> {
     /// Due to replication, a key may land on several nodes, but the primary
     /// destination is the node controlling ring position coming immediately
     /// after the key.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use mpchash::Keyspace;
-    ///
-    /// let mut ring = mpchash::HashRing::<u64>::new();
-    /// for i in 0..6 {
-    ///     ring.add(i);
-    /// }
-    /// for i in 0..100 {
-    ///     println!(
-    ///         "key {i} should go to node {}",
-    ///         ring.primary_node(&i).expect("no node found for key")
-    ///     );
-    /// }
-    /// ```
-    pub fn primary_node<K: Hash>(&self, key: &K) -> Option<&N> {
-        self.primary_token(key).map(|token| token.1)
+    fn primary_node<K: Hash>(&self, key: &K) -> Option<RingToken<N>> {
+        self.primary_token(key)
     }
 
     /// Returns the token of a node that owns a range for the given key.
@@ -227,24 +201,7 @@ impl<N: RingNode> HashRing<N> {
     /// Double hashing is used to avoid non-uniform distribution of keys across
     /// the ring. From the multiple produced positions, the one with the
     /// minimal distance to the next node is selected.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use mpchash::Keyspace;
-    ///
-    /// let mut ring = mpchash::HashRing::<u64>::new();
-    /// for i in 0..6 {
-    ///     ring.add(i);
-    /// }
-    /// for i in 0..100 {
-    ///     let (pos, node) = ring
-    ///         .primary_token(&i)
-    ///         .expect("no primary token found for key");
-    ///     println!("key {i} should go to node {node} at position {pos}");
-    /// }
-    /// ```
-    pub fn primary_token<K: Hash>(&self, key: &K) -> Option<RingToken<N>> {
+    fn primary_token<K: Hash>(&self, key: &K) -> Option<RingToken<N>> {
         let mut min_distance = RingPosition::MAX;
         let mut min_token = None;
 
@@ -253,11 +210,11 @@ impl<N: RingNode> HashRing<N> {
         for pos in self.partitioner.positions(key, self.probe_count) {
             // Find the peer that owns the position, and calculate the distance to it.
             match self.tokens(pos, Clockwise).next() {
-                Some((next_pos, next_peer_id)) => {
-                    let distance = distance(pos, *next_pos);
+                Some(token) => {
+                    let distance = distance(pos, token.position());
                     if distance < min_distance {
                         min_distance = distance;
-                        min_token = Some((next_pos, next_peer_id));
+                        min_token = Some(token);
                     }
                 }
                 None => {
@@ -297,6 +254,7 @@ impl<N: RingNode> HashRing<N> {
                     .chain(self.positions.range((Excluded(start), Unbounded)).rev()),
             ),
         }
+        .map(Into::into)
     }
 
     /// Returns the key space range owned by a node, if it was located at given
@@ -315,7 +273,7 @@ impl<N: RingNode> HashRing<N> {
     /// ```
     /// use mpchash::{HashRing, Keyspace, RingPosition};
     ///
-    /// let mut ring = HashRing::new();
+    /// let ring = HashRing::new();
     ///
     /// // Define nodes.
     /// let node1 = "SomeNode1";
@@ -339,7 +297,7 @@ impl<N: RingNode> HashRing<N> {
             return None;
         }
         let prev_pos = self.tokens(pos, Clockwise).next_back();
-        let start = prev_pos.map_or(0, |token| *token.0);
+        let start = prev_pos.map_or(0, |token| token.position());
         Some(KeyRange::new(start, pos))
     }
 
@@ -380,7 +338,7 @@ mod tests {
 
     #[test]
     fn tokens() {
-        let mut ring = HashRing::new();
+        let ring = HashRing::new();
         let node1 = Node::random();
         let node2 = Node::random();
         let node3 = Node::random();
@@ -391,7 +349,7 @@ mod tests {
         // Traverse from the beginning (clockwise).
         let positions = ring
             .tokens(0, Clockwise)
-            .map(|token| *token.1)
+            .map(|token| *token.node())
             .collect::<Vec<_>>();
         assert_eq!(positions.len(), 3);
         assert!(positions.contains(&node1));
@@ -401,7 +359,7 @@ mod tests {
         // Traverse from the beginning (counter-clockwise).
         let positions = ring
             .tokens(0, CounterClockwise)
-            .map(|token| *token.1)
+            .map(|token| *token.node())
             .collect::<Vec<_>>();
         assert_eq!(positions.len(), 3);
         assert!(positions.contains(&node1));
@@ -412,7 +370,7 @@ mod tests {
         ring.remove(&node2);
         let positions = ring
             .tokens(0, Clockwise)
-            .map(|token| *token.1)
+            .map(|token| *token.node())
             .collect::<Vec<_>>();
         assert_eq!(positions.len(), 2);
         assert!(positions.contains(&node1));
@@ -422,14 +380,14 @@ mod tests {
 
     #[test]
     fn tokens_wrap_around() {
-        let mut ring = HashRing::new();
+        let ring = HashRing::new();
         let nodes = vec![Node::random(), Node::random(), Node::random()];
         nodes.iter().for_each(|node| ring.add(*node));
 
         // Start from position near the end of the ring (wrap around, clockwise).
         let positions = ring
             .tokens(u64::MAX - 1, Clockwise)
-            .map(|token| *token.1)
+            .map(|token| *token.node())
             .collect::<Vec<_>>();
         assert_eq!(
             BTreeSet::from_iter(positions),
@@ -439,7 +397,7 @@ mod tests {
         // Start from position near zero of the ring (wrap around, counter-clockwise).
         let positions = ring
             .tokens(1, CounterClockwise)
-            .map(|token| *token.1)
+            .map(|token| *token.node())
             .collect::<Vec<_>>();
         assert_eq!(BTreeSet::from_iter(positions), BTreeSet::from_iter(nodes));
     }
@@ -448,14 +406,14 @@ mod tests {
     fn assert_nodes(ring: &HashRing<Node>, start: u64, dir: RingDirection, expected: Vec<Node>) {
         let positions = ring
             .tokens(start, dir)
-            .map(|token| *token.1)
+            .map(|token| *token.node())
             .collect::<Vec<_>>();
         assert_eq!(positions, expected);
     }
 
     #[test]
     fn tokens_corner_cases() {
-        let mut ring = HashRing::new();
+        let ring = HashRing::new();
         let node1 = Node::random();
         let node2 = Node::random();
         let node3 = Node::random();
@@ -491,7 +449,7 @@ mod tests {
 
     #[test]
     fn tokens_for_key() {
-        let mut ring = HashRing::new();
+        let ring = HashRing::new();
         let node1 = Node::random();
         let node2 = Node::random();
         let node3 = Node::random();
