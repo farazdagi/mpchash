@@ -66,19 +66,8 @@ assert_eq!(token.node(), &MyNode(2));
 // destination/owning nodes.
 //
 // Assuming a replication factor of 3, we can do:
-let tokens = ring.replicas(&key, 3).expect("empty ring");
-assert_eq!(tokens.iter().map(|e| e.node()).collect::<Vec<_>>(), vec![
-    &MyNode(1),
-    &MyNode(2),
-    &MyNode(3)
-]);
-
-// Token can be also dereferenced to get the node itself.
-assert_eq!(tokens.iter().map(Deref::deref).collect::<Vec<_>>(), vec![
-    &MyNode(1),
-    &MyNode(2),
-    &MyNode(3)
-]);
+let tokens = ring.replicas(&key, 3);
+assert_eq!(tokens, vec![&MyNode(1), &MyNode(2), &MyNode(3)]);
 
 // Before node removal we probably need to move its data.
 // To find out range of keys owned by a node:
@@ -98,8 +87,8 @@ assert_eq!(token_removed.node(), &MyNode(2));
 let token = ring.node(&key).expect("empty ring");
 assert_eq!(token.node(), &MyNode(4));
 
-let tokens = ring.replicas(&key, 3).expect("empty ring");
-assert_eq!(tokens.iter().map(|e| e.deref()).collect::<Vec<_>>(), vec![
+let tokens = ring.replicas(&key, 3);
+assert_eq!(tokens.iter().map(|e| e.node()).collect::<Vec<_>>(), vec![
     &MyNode(1),
     &MyNode(3),
     &MyNode(4)

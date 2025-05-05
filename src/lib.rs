@@ -101,12 +101,10 @@ impl<N: RingNode> Keyspace<N> for HashRing<N> {
         self.primary_node(key)
     }
 
-    fn replicas<K: Hash>(&self, key: &K, k: usize) -> Option<Vec<Self::NodeRef<'_>>> {
-        let result = self
-            .tokens(self.position(key), Clockwise)
+    fn replicas<K: Hash>(&self, key: &K, k: usize) -> Vec<Self::NodeRef<'_>> {
+        self.tokens(self.position(key), Clockwise)
             .take(k)
-            .collect::<Vec<_>>();
-        Some(result)
+            .collect::<Vec<_>>()
     }
 
     fn intervals(&self, node: &N) -> Option<Vec<Self::Interval>> {

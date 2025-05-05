@@ -60,6 +60,24 @@ impl<T: RingNode> PartialEq for RingToken<'_, T> {
 
 impl<T: RingNode> Eq for RingToken<'_, T> {}
 
+impl<T> PartialEq<T> for RingToken<'_, T>
+where
+    T: RingNode + PartialEq,
+{
+    fn eq(&self, other: &T) -> bool {
+        self.node() == other
+    }
+}
+
+impl<T> PartialEq<&T> for RingToken<'_, T>
+where
+    T: RingNode + PartialEq,
+{
+    fn eq(&self, other: &&T) -> bool {
+        self.node() == *other
+    }
+}
+
 impl<T: RingNode> PartialOrd for RingToken<'_, T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
