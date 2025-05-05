@@ -11,12 +11,15 @@ use {
     },
     std::{
         collections::BTreeMap,
-        fmt::Debug,
         hash::Hash,
         ops::Bound::{Excluded, Unbounded},
     },
 };
-pub use {partitioner::*, range::*};
+pub use {
+    keyspace::{Keyspace, Node as RingNode},
+    partitioner::*,
+    range::*,
+};
 
 /// Number of probing attempts before selecting key's position on the ring.
 ///
@@ -27,13 +30,6 @@ pub const DEFAULT_PROBE_COUNT: usize = 23;
 
 /// Position on the ring.
 pub type RingPosition = u64;
-
-/// Node that can be assigned a position on the ring.
-pub trait RingNode: Hash + Clone + Debug + Eq + PartialEq + Ord + PartialOrd {}
-
-/// Blanket implementation of `RingNode` for all types that implement the
-/// necessary traits.
-impl<T> RingNode for T where T: Hash + Clone + Debug + Eq + PartialEq + Ord + PartialOrd {}
 
 /// An ownership over a position on the ring (by the object of type `T`,
 /// normally, `RingNode`).
@@ -73,12 +69,57 @@ impl<N: RingNode> Default for HashRing<N> {
     }
 }
 
-impl<N: RingNode> Debug for HashRing<N> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("HashRing")
-            .field("positions", &self.positions)
-            .field("probe_count", &self.probe_count)
-            .finish_non_exhaustive()
+impl<N: RingNode> Keyspace<N> for HashRing<N> {
+    type Interval = KeyRange<RingPosition>;
+
+    /// Adds a new node to the ring.
+    ///
+    /// The position is computed deterministically using keyspace partitioner.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mpchash::Keyspace;
+    ///
+    /// let mut ring = mpchash::HashRing::<u64>::new();
+    /// ring.add(0);
+    /// ```
+    fn add(&mut self, node: N) {
+        let pos = self.partitioner.position(&node);
+        self.positions.insert(pos, node);
+    }
+
+    /// Removes a node from the ring.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use mpchash::Keyspace;
+    ///
+    /// let mut ring = mpchash::HashRing::<u64>::new();
+    /// ring.add(42);
+    /// ring.remove(&42);
+    /// ```
+    fn remove(&mut self, node: &N) {
+        let pos = self.partitioner.position(node);
+        self.positions.remove(&pos);
+    }
+
+    fn node<K: Hash>(&self, key: &K) -> Option<&N> {
+        self.primary_node(key)
+    }
+
+    fn replicas<K: Hash>(&self, key: &K, k: usize) -> Option<Vec<&N>> {
+        let mut result = Vec::new();
+        self.tokens(self.position(key), Clockwise)
+            .take(k)
+            .for_each(|token| result.push(token.1));
+        Some(result)
+    }
+
+    fn intervals(&self, node: &N) -> Option<Vec<Self::Interval>> {
+        let pos = self.position(node);
+        self.key_range(pos).map(|range| vec![range])
     }
 }
 
@@ -91,6 +132,8 @@ impl<N: RingNode> HashRing<N> {
     ///
     /// Create ring with `u64` nodes:
     /// ```
+    /// use mpchash::Keyspace;
+    ///
     /// let mut ring = mpchash::HashRing::<u64>::new();
     /// ring.add(0);
     /// ring.add(2)
@@ -98,7 +141,7 @@ impl<N: RingNode> HashRing<N> {
     ///
     /// Create ring with custom node type:
     /// ```
-    /// use mpchash::{HashRing, RingNode};
+    /// use mpchash::{HashRing, Keyspace, RingNode};
     ///
     /// #[derive(Hash, Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
     /// struct Node {
@@ -113,21 +156,6 @@ impl<N: RingNode> HashRing<N> {
         Self::default()
     }
 
-    /// Adds a new node to the ring.
-    ///
-    /// The position is computed deterministically using keyspace partitioner.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let mut ring = mpchash::HashRing::<u64>::new();
-    /// ring.add(0);
-    /// ```
-    pub fn add(&mut self, node: N) {
-        let pos = self.partitioner.position(&node);
-        self.positions.insert(pos, node);
-    }
-
     /// Inserts a node to a given ring position.
     ///
     /// Mostly useful for testing and simulation, use `add` in all other cases.
@@ -135,6 +163,7 @@ impl<N: RingNode> HashRing<N> {
     /// # Examples
     ///
     /// ```
+    /// use mpchash::Keyspace;
     /// let mut ring = mpchash::HashRing::<u64>::new();
     /// // Insert node "15" at position 0.
     /// ring.insert(0, 15);
@@ -143,20 +172,6 @@ impl<N: RingNode> HashRing<N> {
     /// ```
     pub fn insert(&mut self, pos: RingPosition, node: N) {
         self.positions.insert(pos, node);
-    }
-
-    /// Removes a node from the ring.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let mut ring = mpchash::HashRing::<u64>::new();
-    /// ring.add(42);
-    /// ring.remove(&42);
-    /// ```
-    pub fn remove(&mut self, node: &N) {
-        let pos = self.partitioner.position(node);
-        self.positions.remove(&pos);
     }
 
     /// Returns the primary node responsible for the given key.
@@ -168,6 +183,8 @@ impl<N: RingNode> HashRing<N> {
     /// # Examples
     ///
     /// ```
+    /// use mpchash::Keyspace;
+    ///
     /// let mut ring = mpchash::HashRing::<u64>::new();
     /// for i in 0..6 {
     ///     ring.add(i);
@@ -198,6 +215,8 @@ impl<N: RingNode> HashRing<N> {
     /// # Examples
     ///
     /// ```
+    /// use mpchash::Keyspace;
+    ///
     /// let mut ring = mpchash::HashRing::<u64>::new();
     /// for i in 0..6 {
     ///     ring.add(i);
@@ -246,6 +265,8 @@ impl<N: RingNode> HashRing<N> {
     /// # Examples
     ///
     /// ```
+    /// use mpchash::Keyspace;
+    ///
     /// let mut ring = mpchash::HashRing::<u64>::new();
     /// for i in 0..6 {
     ///     ring.add(i);
@@ -294,7 +315,7 @@ impl<N: RingNode> HashRing<N> {
     /// # Examples
     ///
     /// ```
-    /// use mpchash::{HashRing, RingPosition};
+    /// use mpchash::{HashRing, Keyspace, RingPosition};
     ///
     /// let mut ring = HashRing::new();
     ///

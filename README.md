@@ -8,28 +8,85 @@ Consistent hashing algorithm implementation based on the
 
 ## Features
 
-- [x] Multi-probe consistent hashing.
 - [x] Balanced distribution of keys, with peak-to-average load ratio of `1 + ε` with just `1 + 1/ε`
   lookups per key.
 - [x] No virtual nodes, so no extra space required -- `O(n)` space complexity. The high space
-  requirement is the main downside of the original Karger's ring.
-- [x] All conventional consistent hashing methods, like moving through the ring (in both
-  directions), adding and removing nodes, finding the closest node to a key, finding a key range
-  owned by a node etc.
+  requirement is the main downside of the original
+  [Karger's ring](https://dl.acm.org/doi/10.1145/258533.258660).
+- [x] Supports very simple [`keyspace management API`](crate::Keyspace) which is enough for dynamic
+  key space partitioning and re-balancing.
 
 ## Motivation
 
-The original consistent hashing algorithm was introduced by Karger et al. (in the
-[Consistent Hashing and Random Trees: Distributed Caching Protocols for Relieving Hot Spots on the World Wide Web](https://dl.acm.org/doi/10.1145/258533.258660)
-paper) and while it provides number of very useful properties, it has a very important limitation:
-as nodes are assigned positions on the ring using the hash value of their identifiers, and since
-there normally not that many physical nodes to begin with -- the key space is rarely partitioned
-evenly, with some nodes controlling bigger segments of the ring.
+The original consistent hashing algorithm was introduced by Karger et al. in the
+[Consistent Hashing and Random Trees](https://dl.acm.org/doi/10.1145/258533.258660) paper. While the
+algorithm provides number of very useful properties, it has a very important limitation: nodes
+positions are assigned pseudo-randomly and since there normally not that many physical nodes to
+begin with -- the key space is rarely partitioned evenly, with some nodes controlling bigger
+segments of the ring.
 
-The conventional solution is to introduce virtual nodes, which are replicas of the actual nodes, and
-assign them positions on the ring. This way, there are way more node points on the ring, and thus
-the key space is divided more evenly among the nodes. The downside of this approach is higher memory
-requirements to store the ring state. This also complicates the ring state management a bit.
+The conventional solution is to introduce virtual nodes, which are replicas of the physical nodes.
+This way, there are way more node points on the ring, and, as the result, the key space is divided
+more evenly. The downside of this approach is higher memory requirements to store the ring state.
+This also complicates the ring state management a bit.
+
+Multi-probe consistent hashing resolves this problem.
+
+## Usage
+
+The implementation supports all the necessary methods for [key space management](crate::Keyspace):
+
+``` rust
+use mpchash::{HashRing, Keyspace};
+
+// Anything that implements `Hash` can be used as a node.
+// Other traits are derived here for testing purposes.
+#[derive(Hash, Debug, PartialEq, Clone, Copy)]
+struct MyNode(u64);
+
+// Create a new ring, and add nodes to it.
+let mut ring = HashRing::new();
+ring.add(MyNode(1));
+ring.add(MyNode(2));
+ring.add(MyNode(3));
+ring.add(MyNode(4));
+ring.add(MyNode(5));
+
+// Anything that implements `Hash` can be used as a key.
+// To find which node should own a key:
+let key = "hello world";
+let owning_node = ring.node(&key).expect("empty ring");
+assert_eq!(owning_node, &MyNode(2));
+
+// In replicated settings, we want to have several replicas
+// of a key, so need multiple destination/owning nodes.
+// Assuming we have a replication factor of 3, we can do:
+let owning_nodes = ring.replicas(&key, 3).expect("empty ring");
+assert_eq!(owning_nodes, vec![&MyNode(1), &MyNode(2), &MyNode(3)]);
+
+// Before node removal we need to move its, data.
+// To find out range of keys owned by a node, we can do:
+let ranges = ring.intervals(owning_node).expect("empty ring");
+assert_eq!(ranges.len(), 1);
+
+// The range starts at the position where previous node ends,
+// and ends at the position of the owning node.
+assert_eq!(ranges[0].start, ring.position(&MyNode(1)));
+assert_eq!(ranges[0].end, ring.position(&owning_node));
+
+// Remove node and check the owning nodes again.
+ring.remove(&MyNode(2));
+
+// `MyNode(2)` is removed, `MyNode(4)` takes its place now.
+let owning_node = ring.node(&key).expect("empty ring");
+assert_eq!(owning_node, &MyNode(4));
+
+let owning_nodes = ring.replicas(&key, 3).expect("empty ring");
+assert_eq!(owning_nodes, vec![&MyNode(1), &MyNode(3), &MyNode(4)]);
+
+```
+
+## Implementation Notes
 
 Multi-probe consistent hashing is a variant of consistent hashing that doesn't require introduction
 of virtual nodes, yet achieves very similar load balancing properties.
@@ -46,162 +103,7 @@ increased for a probe to land on their segments, however, due to very size of th
 chance of landing close enough to the node point, and thus being eventually picked as a successful
 probe, are lowered.
 
-See the paper for more details.
-
-## Usage
-
-The implementation supports all the features of the conventional consistent hashing algorithm, so it
-can be used as a drop-in replacement for any existing implementation.
-
-### Defining a node
-
-Anything that implements the following traits can be placed on a ring as a node:
-
-`Hash` + `Clone` + `Debug` + `Eq` + `PartialEq` + `Ord` + `PartialOrd`
-
-Here is an example of using custom type as a node:
-
-``` rust
-#[derive(Hash, Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-struct Node {
-    id: u64,
-}
-
-impl Node {
-    fn new(id: u64) -> Self {
-        Self { id }
-    }
-}
-```
-
-### Creating a ring
-
-To create a ring and populate it with nodes:
-
-``` rust
-use mpchash::HashRing;
-
-# #[derive(Hash, Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-# struct Node {
-#    id: u64,
-# }
-#
-# impl Node {
-#    fn new(id: u64) -> Self {
-#        Self { id }
-#    }
-# }
-
-let mut ring = HashRing::new();
-ring.add(Node::new(1));
-ring.add(Node::new(2));
-ring.add(Node::new(3));
-```
-
-### Finding a node that owns a key
-
-Anything that implements `Hash` can be used as a key:
-
-``` rust
-use mpchash::HashRing;
-
-# #[derive(Hash, Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-# struct Node {
-#    id: u64,
-# }
-#
-# impl Node {
-#    fn new(id: u64) -> Self {
-#        Self { id }
-#    }
-# }
-
-// ... ring initialization code
-#   let mut ring = HashRing::new();
-#   ring.add(Node::new(1));
-#   ring.add(Node::new(2));
-#   ring.add(Node::new(3));
-
-// Anything that implements `Hash` can be used as a key.
-let key = "hello world";
-
-// Node that owns the key.
-//
-// It is the first node when moving in CW direction from the
-// position where key is hashed to.
-let owning_node = ring.primary_node(&key);
-
-// If we are interested in both ring position and owning node,
-// we can get them with `primary_token`.
-//
-// A token is just a tuple of `(position, node)`.
-let token = ring.primary_token(&key);
-```
-
-In replicated settings, we want to have several replicas of a key, so need multiple
-destination/owning nodes.
-
-In order to obtain such a list of replica nodes, we can traverse the ring from a given position:
-
-``` rust
-use mpchash::{HashRing, RingDirection::Clockwise};
-
-# #[derive(Hash, Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-# struct Node {
-#    id: u64,
-# }
-#
-# impl Node {
-#    fn new(id: u64) -> Self {
-#        Self { id }
-#    }
-# }
-let mut ring = HashRing::new();
-ring.add(Node::new(1));
-ring.add(Node::new(1));
-
-let key = "hello world";
-let tokens = ring
-    .tokens(ring.position(&key), Clockwise)
-    .collect::<Vec<_>>();
-
-for (pos, node) in ring.tokens(ring.position(&key), Clockwise) {
-    println!("node {:?} is at position {:?}", node, pos);
-}
-```
-
-Normally, you would collect/traverse `replication factor` number of tokens, so that you have
-`replication factor` of destination nodes.
-
-### Finding a key range owned by a node
-
-Sometimes it is necessary to find a range of keys owned by a node. For example, when some node's
-data needs to be rebalanced to another node. In this case, we are moving from the node's position in
-the ring in CCW direction, until we find a previous node. As we are operating on a ring we need to
-account for the wrap-around. All this is handled by the `key_range` method:
-
-``` rust
-use mpchash::{HashRing, RingDirection::Clockwise};
-
-let mut ring = HashRing::new();
-
-// Define nodes.
-let node1 = "SomeNode1";
-let node2 = "SomeNode2";
-
-// Add nodes to the ring.
-ring.add(node1);
-ring.add(node2);
-
-// Get the range owned by node1.
-let pos = ring.position(&node1);
-let range = ring.key_range(pos).unwrap();
-
-// The range starts at the position to the left of node1,
-// till (and not including) its own position.
-assert_eq!(range.start, ring.position(&node2));
-assert_eq!(range.end, ring.position(&node1));
-```
+See the [paper](https://arxiv.org/pdf/1505.00062.pdf) for more details.
 
 ## License
 

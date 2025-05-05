@@ -1,6 +1,7 @@
 use {
     mpchash::{
         HashRing,
+        Keyspace,
         RingDirection::{self, Clockwise, CounterClockwise},
     },
     rand::random,
