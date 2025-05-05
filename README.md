@@ -88,11 +88,7 @@ let token = ring.node(&key).expect("empty ring");
 assert_eq!(token.node(), &MyNode(4));
 
 let tokens = ring.replicas(&key, 3);
-assert_eq!(tokens.iter().map(|e| e.node()).collect::<Vec<_>>(), vec![
-    &MyNode(1),
-    &MyNode(3),
-    &MyNode(4)
-]);
+assert_eq!(tokens, vec![&MyNode(1), &MyNode(3), &MyNode(4)]);
 ```
 
 ## Implementation Notes
