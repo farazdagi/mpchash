@@ -13,8 +13,9 @@ Consistent hashing algorithm implementation based on the
 - [x] No virtual nodes, so no extra space required -- `O(n)` space complexity. The high space
   requirement is the main downside of the original
   [Karger's ring](https://dl.acm.org/doi/10.1145/258533.258660).
-- [x] Supports very simple [`keyspace management API`](crate::Keyspace) which is enough for dynamic
-  key space partitioning and re-balancing.
+- [x] Supports very simple
+  [`keyspace management API`](https://docs.rs/mpchash/latest/mpchash/trait.Keyspace.html) which
+  is enough for dynamic key space partitioning and re-balancing.
 
 ## Motivation
 
@@ -40,7 +41,7 @@ The implementation supports all the necessary methods for [key space management]
 use mpchash::{HashRing, Keyspace};
 
 // Anything that implements `Hash` can be used as a node.
-// Other traits are derived here for testing purposes.
+// Other traits used here are derived for testing purposes.
 #[derive(Hash, Debug, PartialEq, Clone, Copy)]
 struct MyNode(u64);
 
@@ -64,8 +65,8 @@ assert_eq!(owning_node, &MyNode(2));
 let owning_nodes = ring.replicas(&key, 3).expect("empty ring");
 assert_eq!(owning_nodes, vec![&MyNode(1), &MyNode(2), &MyNode(3)]);
 
-// Before node removal we need to move its, data.
-// To find out range of keys owned by a node, we can do:
+// Before node removal we probably need to move its data.
+// To find out range of keys owned by a node:
 let ranges = ring.intervals(owning_node).expect("empty ring");
 assert_eq!(ranges.len(), 1);
 
