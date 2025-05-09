@@ -1,10 +1,10 @@
 [package]
 name = "mpchash"
-version = "2.0.3"
+version = "2.0.4"
 authors = ["Victor Farazdagi <farazdagi@gmail.com>"]
 edition = "2021"
 license = "MIT"
-description = "Multi-probe consistent hashing algorithm implementation"
+description = "A space-efficient (no need for vnodes) multi-probe consistent hashing algorithm"
 homepage = "https://github.com/farazdagi/mpchash"
 repository = "https://github.com/farazdagi/mpchash"
 documentation = "https://docs.rs/mpchash"

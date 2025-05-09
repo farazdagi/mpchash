@@ -80,8 +80,7 @@ assert_eq!(ranges[0].start, ring.position(&MyNode(1)));
 assert_eq!(ranges[0].end, ring.position(&token.node()));
 
 // Remove node and check the owning nodes again.
-let token_removed = ring.remove(&MyNode(2)).expect("empty ring");
-assert_eq!(token_removed.node(), &MyNode(2));
+ring.remove(&MyNode(2));
 
 // `MyNode(2)` is removed, `MyNode(4)` takes its place now.
 let token = ring.node(&key).expect("empty ring");

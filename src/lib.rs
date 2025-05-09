@@ -92,9 +92,9 @@ impl<N: RingNode> Keyspace<N> for HashRing<N> {
     /// ring.add(42);
     /// ring.remove(&42);
     /// ```
-    fn remove(&self, node: &N) -> Option<Self::NodeRef<'_>> {
+    fn remove(&self, node: &N) {
         let pos = self.partitioner.position(node);
-        self.positions.remove(&pos).map(Into::into)
+        self.positions.remove(&pos);
     }
 
     fn node<K: Hash>(&self, key: &K) -> Option<Self::NodeRef<'_>> {
