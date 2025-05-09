@@ -2,6 +2,7 @@
 
 [![crates.io](https://img.shields.io/crates/d/mpchash.svg)](https://crates.io/crates/mpchash)
 [![docs.rs](https://docs.rs/mpchash/badge.svg)](https://docs.rs/mpchash)
+[![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance/)
 
 Consistent hashing algorithm implementation based on the
 [Multi-probe consistent hashing](https://arxiv.org/pdf/1505.00062.pdf) paper.
