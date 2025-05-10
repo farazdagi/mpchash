@@ -1,6 +1,6 @@
 [package]
 name = "mpchash"
-version = "2.0.5"
+version = "2.0.6"
 authors = ["Victor Farazdagi <farazdagi@gmail.com>"]
 edition = "2021"
 license = "MIT"
@@ -20,5 +20,4 @@ features = ["xxh3", "const_xxh3"]
 num-traits = "0.2"
 rand = "0.9"
 hash-iter = "1"
-keyspace = "0.1"
 crossbeam-skiplist = "0.1"

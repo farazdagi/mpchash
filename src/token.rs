@@ -1,5 +1,5 @@
 use {
-    crate::{NodeRef, RingNode, RingPosition},
+    crate::{RingNode, RingPosition},
     crossbeam_skiplist::map::Entry,
     std::{borrow::Borrow, ops::Deref},
 };
@@ -12,7 +12,6 @@ use {
 #[derive(Clone, Debug)]
 pub struct RingToken<'a, T>(Entry<'a, RingPosition, T>);
 
-impl<'a, T: RingNode> NodeRef<'a, T> for RingToken<'a, T> {}
 
 impl<T: RingNode> RingToken<'_, T> {
     /// Return the position of the node on the ring.

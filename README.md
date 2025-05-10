@@ -3,6 +3,7 @@
 [![crates.io](https://img.shields.io/crates/d/mpchash.svg)](https://crates.io/crates/mpchash)
 [![docs.rs](https://docs.rs/mpchash/badge.svg)](https://docs.rs/mpchash)
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance/)
+[![dependencies](https://deps.rs/repo/github/farazdagi/mpchash/status.svg)](https://deps.rs/repo/github/farazdagi/mpchash)
 
 Consistent hashing algorithm implementation based on the
 [Multi-probe consistent hashing](https://arxiv.org/pdf/1505.00062.pdf) paper.
@@ -36,7 +37,7 @@ Multi-probe consistent hashing resolves this problem.
 The implementation supports all the necessary methods for hash ring management:
 
 ``` rust
-use mpchash::{HashRing, Keyspace};
+use mpchash::HashRing;
 use std::ops::Deref;
 
 // Anything that implements `Hash + Send` can be used as a node.
@@ -46,11 +47,9 @@ struct MyNode(u64);
 
 // Create a new ring, and add nodes to it.
 let ring = HashRing::new();
-ring.add(MyNode(1));
-ring.add(MyNode(2));
-ring.add(MyNode(3));
-ring.add(MyNode(4));
-ring.add(MyNode(5));
+(1..=5).for_each(|i| {
+    ring.add(MyNode(i));
+});
 
 // Anything that implements `Hash` can be used as a key.
 // To find which node should own a key:

@@ -18,12 +18,15 @@ use {
         sync::Arc,
     },
 };
-pub use {
-    keyspace::{Keyspace, Node as RingNode, NodeRef},
-    partitioner::*,
-    range::*,
-    token::RingToken,
-};
+pub use {partitioner::*, range::*, token::RingToken};
+
+/// Node that serves as a destination for data.
+///
+/// Node controls one or more interval of the key space.
+/// Keys which fall into such an interval are routed to the node.
+pub trait RingNode: Hash + Send + 'static {}
+
+impl<T> RingNode for T where T: Hash + Send + 'static {}
 
 /// Number of probing attempts before selecting key's position on the ring.
 ///
@@ -69,66 +72,6 @@ impl<N: RingNode> Default for HashRing<N> {
     }
 }
 
-impl<N: RingNode> Keyspace<N> for HashRing<N> {
-    type Interval = KeyRange<RingPosition>;
-    type NodeRef<'a> = RingToken<'a, N>;
-    type Position = RingPosition;
-
-    /// Adds a new node and its capacity to the ring.
-    ///
-    /// The position is computed deterministically using keyspace partitioner.
-    fn add_with_capacity(&self, node: N, _capacity: usize) {
-        let pos = self.partitioner.position(&node);
-        self.positions.insert(pos, node);
-    }
-
-    /// Removes a node from the ring.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use mpchash::Keyspace;
-    ///
-    /// let ring = mpchash::HashRing::<u64>::new();
-    /// ring.add(42);
-    /// ring.remove(&42);
-    /// ```
-    fn remove(&self, node: &N) {
-        let pos = self.partitioner.position(node);
-        self.positions.remove(&pos);
-    }
-
-    fn node<K: Hash>(&self, key: &K) -> Option<Self::NodeRef<'_>> {
-        self.primary_node(key)
-    }
-
-    fn replicas<K: Hash>(&self, key: &K, k: usize) -> Vec<Self::NodeRef<'_>> {
-        self.tokens(self.position(key), Clockwise)
-            .take(k)
-            .collect::<Vec<_>>()
-    }
-
-    fn intervals(&self, node: &N) -> Option<Vec<Self::Interval>> {
-        let pos = self.position(node);
-        self.key_range(pos).map(|range| vec![range])
-    }
-
-    /// Returns ring position to which a given key will be assigned.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use mpchash::Keyspace;
-    /// let ring = mpchash::HashRing::<u64>::new();
-    /// let key = "some key";
-    /// // Find the position of the key on the ring.
-    /// let pos = ring.position(&key);
-    /// ```
-    fn position<K: Hash>(&self, key: &K) -> Self::Position {
-        self.partitioner.position(key)
-    }
-}
-
 impl<N: RingNode> HashRing<N> {
     /// Creates a new hash ring.
     ///
@@ -138,8 +81,6 @@ impl<N: RingNode> HashRing<N> {
     ///
     /// Create ring with `u64` nodes:
     /// ```
-    /// use mpchash::Keyspace;
-    ///
     /// let ring = mpchash::HashRing::<u64>::new();
     /// ring.add(0);
     /// ring.add(2)
@@ -147,7 +88,7 @@ impl<N: RingNode> HashRing<N> {
     ///
     /// Create ring with custom node type:
     /// ```
-    /// use mpchash::{HashRing, Keyspace, RingNode};
+    /// use mpchash::{HashRing, RingNode};
     ///
     /// #[derive(Hash, Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
     /// struct Node {
@@ -169,7 +110,6 @@ impl<N: RingNode> HashRing<N> {
     /// # Examples
     ///
     /// ```
-    /// use mpchash::Keyspace;
     /// let ring = mpchash::HashRing::<u64>::new();
     /// // Insert node "15" at position 0.
     /// ring.insert(0, 15);
@@ -180,12 +120,72 @@ impl<N: RingNode> HashRing<N> {
         self.positions.insert(pos, node);
     }
 
+    /// Adds a new node to the ring.
+    ///
+    /// The position is computed deterministically using keyspace partitioner.
+    pub fn add(&self, node: N) {
+        let pos = self.partitioner.position(&node);
+        self.positions.insert(pos, node);
+    }
+
+    /// Removes a node from the ring.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let ring = mpchash::HashRing::<u64>::new();
+    /// ring.add(42);
+    /// ring.remove(&42);
+    /// ```
+    pub fn remove(&self, node: &N) {
+        let pos = self.partitioner.position(node);
+        self.positions.remove(&pos);
+    }
+
+    /// Returns `k` nodes responsible for the given key.
+    ///
+    /// The first node is the primary node responsible for the key. It is
+    /// guaranteed that the first node is the same as the one returned by
+    /// [`node()`](Self::node).
+    pub fn replicas<K: Hash>(&self, key: &K, k: usize) -> Vec<RingToken<'_, N>> {
+        self.tokens(self.position(key), Clockwise)
+            .take(k)
+            .collect::<Vec<_>>()
+    }
+
+    /// Returns intervals of the key space controlled by the given node.
+    ///
+    /// This method is necessary to re-balance the key space. When a node is
+    /// added or removed, data needs to be moved from one node to another.
+    /// In order to do so, the current intervals controlled by the node need
+    /// to be known.
+    ///
+    /// Whenever the node is not part of the key space, `None` is returned.
+    pub fn intervals(&self, node: &N) -> Option<Vec<KeyRange<RingPosition>>> {
+        let pos = self.position(node);
+        self.key_range(pos).map(|range| vec![range])
+    }
+
+    /// Returns ring position to which a given key will be assigned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let ring = mpchash::HashRing::<u64>::new();
+    /// let key = "some key";
+    /// // Find the position of the key on the ring.
+    /// let pos = ring.position(&key);
+    /// ```
+    pub fn position<K: Hash>(&self, key: &K) -> RingPosition {
+        self.partitioner.position(key)
+    }
+
     /// Returns the primary node responsible for the given key.
     ///
     /// Due to replication, a key may land on several nodes, but the primary
     /// destination is the node controlling ring position coming immediately
     /// after the key.
-    fn primary_node<K: Hash>(&self, key: &K) -> Option<RingToken<N>> {
+    pub fn node<K: Hash>(&self, key: &K) -> Option<RingToken<N>> {
         self.primary_token(key)
     }
 
@@ -270,7 +270,7 @@ impl<N: RingNode> HashRing<N> {
     /// # Examples
     ///
     /// ```
-    /// use mpchash::{HashRing, Keyspace, RingPosition};
+    /// use mpchash::{HashRing, RingPosition};
     ///
     /// let ring = HashRing::new();
     ///

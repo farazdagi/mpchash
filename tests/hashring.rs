@@ -1,5 +1,5 @@
 use {
-    mpchash::{HashRing, Keyspace},
+    mpchash::{HashRing},
     rand::random,
     std::ops::Deref,
 };
@@ -70,11 +70,9 @@ fn walkthrough() {
 
     // Create a new ring, and add nodes to it.
     let ring = HashRing::new();
-    ring.add(MyNode(1));
-    ring.add(MyNode(2));
-    ring.add(MyNode(3));
-    ring.add(MyNode(4));
-    ring.add(MyNode(5));
+    (1..=5).for_each(|i| {
+        ring.add(MyNode(i));
+    });
 
     // Anything that implements `Hash` can be used as a key.
     // To find which node should own a key:
