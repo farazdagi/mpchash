@@ -15,6 +15,7 @@ Consistent hashing algorithm implementation based on the
 - [x] No virtual nodes, so no extra space required -- `O(n)` space complexity. The high space
   requirement is the main downside of the original
   [Karger's ring](https://dl.acm.org/doi/10.1145/258533.258660).
+- [x] Thread-safe, using a lock-free skip list.
 
 ## Motivation
 
