@@ -12,7 +12,6 @@ use {
 #[derive(Clone, Debug)]
 pub struct RingToken<'a, T>(Entry<'a, RingPosition, T>);
 
-
 impl<T: RingNode> RingToken<'_, T> {
     /// Return the position of the node on the ring.
     pub fn position(&self) -> RingPosition {

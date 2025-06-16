@@ -1,8 +1,4 @@
-use {
-    mpchash::{HashRing},
-    rand::random,
-    std::ops::Deref,
-};
+use {mpchash::HashRing, rand::random, std::ops::Deref};
 
 #[derive(Hash, Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 struct Node {

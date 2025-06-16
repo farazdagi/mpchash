@@ -189,6 +189,11 @@ impl<N: RingNode> HashRing<N> {
         self.primary_token(key)
     }
 
+    /// Returns a list of all nodes currently in the ring.
+    pub fn nodes(&self) -> Vec<RingToken<N>> {
+        self.positions.iter().map(Into::into).collect()
+    }
+
     /// Returns the token of a node that owns a range for the given key.
     ///
     /// A token is a pair of a ring position of a node and a node itself.
