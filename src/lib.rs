@@ -185,7 +185,7 @@ impl<N: RingNode> HashRing<N> {
     /// Due to replication, a key may land on several nodes, but the primary
     /// destination is the node controlling ring position coming immediately
     /// after the key.
-    pub fn node<K: Hash>(&self, key: &K) -> Option<RingToken<N>> {
+    pub fn node<K: Hash>(&self, key: &K) -> Option<RingToken<'_, N>> {
         self.primary_token(key)
     }
 
@@ -200,7 +200,7 @@ impl<N: RingNode> HashRing<N> {
     /// Double hashing is used to avoid non-uniform distribution of keys across
     /// the ring. From the multiple produced positions, the one with the
     /// minimal distance to the next node is selected.
-    fn primary_token<K: Hash>(&self, key: &K) -> Option<RingToken<N>> {
+    fn primary_token<K: Hash>(&self, key: &K) -> Option<RingToken<'_, N>> {
         let mut min_distance = RingPosition::MAX;
         let mut min_token = None;
 
@@ -238,7 +238,7 @@ impl<N: RingNode> HashRing<N> {
         &self,
         start: RingPosition,
         dir: RingDirection,
-    ) -> impl DoubleEndedIterator<Item = RingToken<N>> {
+    ) -> impl DoubleEndedIterator<Item = RingToken<'_, N>> {
         match dir {
             Clockwise => HashRingIter::Clockwise(
                 self.positions

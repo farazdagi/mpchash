@@ -39,7 +39,6 @@ The implementation supports all the necessary methods for hash ring management:
 
 ``` rust
 use mpchash::HashRing;
-use std::ops::Deref;
 
 // Anything that implements `Hash + Send` can be used as a node.
 // Other traits used here are derived for testing purposes.
