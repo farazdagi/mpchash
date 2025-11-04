@@ -36,14 +36,14 @@ pub const DEFAULT_SEED2: u64 = 67890;
 #[derive(Clone)]
 pub struct Xxh3Partitioner {
     hash_builder: Xxh3Builder,
-    hash_iter: DoubleHashHasher,
+    hash_iter: DoubleHashHasher<u64, Xxh3Builder, Xxh3Builder>,
 }
 
 impl Default for Xxh3Partitioner {
     fn default() -> Self {
         Self {
             hash_builder: Xxh3Builder::new(),
-            hash_iter: DoubleHashHasher::with_hash_builders(
+            hash_iter: DoubleHashHasher::<u64, _, _>::with_hash_builders(
                 Xxh3Builder::new(),
                 Xxh3Builder::new(),
                 RingPosition::MAX,
